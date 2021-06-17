@@ -1,6 +1,6 @@
 # Configuration librairie
 
-Pour pigpio:
+Pour pigpio, pthread:
 	
 	-Cross GCC/G++ Compiler
 		|
@@ -11,7 +11,7 @@ Pour pigpio:
                 |  
                 |-->Librairies
                         | 
-                        |-->pigpio
+                        |-->pigpio, pthread
                         | 
                         |-->$HOME/rootfs/usr/local/lib
 
