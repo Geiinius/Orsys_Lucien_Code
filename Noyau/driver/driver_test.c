@@ -61,14 +61,14 @@ static int dev_open(struct inode *inod, struct file *fil){
 static ssize_t dev_read(struct file *filep, char *buf, size_t len, loff_t *off){
 
     printk(KERN_DEBUG "test lecture");
-    //copy_to_user(buf,ker_buf,len);
+    copy_to_user(buf,ker_buf,len);
     return len;
 }
 
 static ssize_t dev_write(struct file *flip, const char *buff, size_t len, loff_t *off){
 
-   printk(KERN_ALERT "lecture");
-   // copy_from_user(ker_buf,buff,len);
+    printk(KERN_ALERT "lecture");
+    copy_from_user(ker_buf,buff,len);
     ker_buf[len]=0;
     return len;
 }
