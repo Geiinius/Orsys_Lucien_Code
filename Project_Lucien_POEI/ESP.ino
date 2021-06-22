@@ -2,17 +2,32 @@
 #include <RFID.h>
 #include <EEPROM.h>
 #include <Servo.h>
+#include <ESP8266WiFi.h>
+#include "PubSubClient.h"
  
 #define SS_PIN 10 //Pin S03
 #define RST_PIN 0 //Pin D3
 #define PWM_PIN 2 //Pin D4
 
-byte led_rouge = 5, led_verte = 16, bouton = 4;
-int position = 0;
-byte cur_badge[5]; //current badge, liste des 5 octets du badge que l'on lit
- 
-int nb_people =0;
+WiFiClient wifiClient;
+PubSubClient clientMQTT(wifiClient);
+const char* ssid = "SFR-3cc0";
+const char* password =  "MANZACAPITAO";
+const char* esp_mqtt_server = "127.0.0.1";
+const char* rpi_mqtt_server = "192.168.0.16";
+const int esp_mqttPort = 12948;
+const char* esp_mqttUser = "esp";
 
+//PIN GPIO
+byte led_rouge = 5, led_verte = 16, bouton_register = 4, bouton_open =9;
+
+//Variable GLOBALE
+int position = 0; //Position servomoteur
+byte cur_badge[5]; //current badge, liste des 5 octets du badge que l'on lit 
+int nb_people =0; //Nombre de personne dans l'habitation
+int nb_bad= 0;
+bool authorization = false;
+//Lecteur RFID
 RFID rfid(SS_PIN, RST_PIN); //Lecteur RFID
 Servo maPorte;  //Servomoteur porte 
 // Set to true to reset eeprom before to write something
@@ -22,28 +37,46 @@ Servo maPorte;  //Servomoteur porte
 void setup()
 { 
   Serial.begin(9600); //uniquement pour debug, arrête de faire pause pour lire mes conneries
+
+  //Init RFID
   SPI.begin(); 
   rfid.init();
-  EEPROM.begin(EEPROM_SIZE);
-  pinMode(led_rouge,OUTPUT);
-  pinMode(led_verte,OUTPUT);
-  pinMode(bouton, INPUT_PULLUP);
-  maPorte.attach(PWM_PIN);
-  //pinMode(serrure, OUTPUT);
-  //pinMode(buzz, OUTPUT);
 
-   if ( RESET_EEPROM ) {
-   for (int i = 0; i < 512; i++) {
+  //Init EEPROM
+  EEPROM.begin(EEPROM_SIZE);
+  if ( RESET_EEPROM ) {
+    for (int i = 0; i < 512; i++)
       EEPROM.write(i, 0);
-    }
     EEPROM.commit();
     delay(500);
   }
+  
+  //Init GPIO
+  pinMode(led_rouge,OUTPUT);
+  pinMode(led_verte,OUTPUT);
+  pinMode(bouton_register, INPUT_PULLUP);
+  pinMode(bouton_open, INPUT_PULLUP);
 
+  //Wifi connexion
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting");
+  while (WiFi.status() != WL_CONNECTED){
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.print("Connected, IP address: ");
+  Serial.println(WiFi.localIP());
+  reconnect();
+  
+  //Init servoMoteur
+  maPorte.attach(PWM_PIN);
   position = 0;
   maPorte.write(position);
-  
-  if( !digitalRead(bouton))// à l'appui du bouton au moment du démarrage, effaçage de la mémoire
+
+
+  //Reset de la memoir si appuie sur le bouton
+  if( !digitalRead(bouton_register))// à l'appui du bouton au moment du démarrage, effaçage de la mémoire
   {
     for (int n=0; n<1024; n++) //lancer ces deux lignes pour effacer totalement la mémoire 
         EEPROM.write(n,0);
@@ -54,7 +87,9 @@ void setup()
   digitalWrite(led_rouge,0);
   digitalWrite(led_verte,0);
   }
-  else //bip normal d'allumage
+  
+  //Allumage normale
+  else
   {
     digitalWrite(led_verte,1); delay(150);
     digitalWrite(led_verte,0); delay(150);
@@ -62,13 +97,26 @@ void setup()
     digitalWrite(led_verte,0);
   }
 }
- 
+
+void reconnect() {
+  clientMQTT.setServer(rpi_mqtt_server, 1883);
+  Serial.println("Trying to connect to MQTT broker");
+  while (!clientMQTT.connected()) {
+    Serial.print(".");  
+    if (clientMQTT.connect(esp_mqttUser)) ;
+    else delay(1000);
+    Serial.print(".");
+  }
+  clientMQTT.subscribe("esp/auth");
+  Serial.println("Connected to Broker...");
+}
+
 void new_badge()
 { 
-  Serial.print("Il y a actuellement: ");
+  /*Serial.print("Il y a actuellement: ");
   Serial.print(EEPROM.read(0));
   Serial.println(" badge(s)");
-  Serial.println("ENREGISTREMENT");
+  Serial.println("ENREGISTREMENT");*/
  
   // Enregistre un nouveau badge dans la mémoire EEPROM
   int start_mem = EEPROM.read(0)*5+1; //dans la première case mémoire, on stock le nombre de badge déjà sauvegardés,
@@ -116,6 +164,10 @@ bool compare_badge()
  
 void loop()
 {
+    if (!clientMQTT.connected()) {
+    //Serial.println("Disconnected from Broker...");
+    reconnect();
+    }
     if (rfid.isCard()) {
         if (rfid.readCardSerial())
             {
@@ -130,35 +182,73 @@ void loop()
                 Serial.println(rfid.serNum[4],DEC);*/
              
          if(compare_badge()) //si la comparaison du badge actuel avec un des badges mémoire est ok, alors on ouvre
-         {
-          delay(500);
-          digitalWrite(led_verte,1);
-          position = 160;
-          maPorte.write(position);
-          delay(5000);
-          position = 0;
-          maPorte.write(position);
-          delay(1000);
-          digitalWrite(led_verte,0);
+         {  
+            nb_bad=0;
+
+            if(nb_people>=6){
+                digitalWrite(led_rouge, 1);
+                clientMQTT.publish("Nombre","MAX");
+                delay(1000);
+                digitalWrite(led_rouge, 0);
+            }
+            else{
+              nb_people+=1;
+              char* nb = "0";
+              nb[0]+=nb_people;
+              clientMQTT.publish("Test","On");
+              delay(500);
+              digitalWrite(led_verte,1);
+              position = 160;
+              maPorte.write(position);
+              delay(5000);
+              position = 0;
+              maPorte.write(position);
+              delay(1000);
+              digitalWrite(led_verte,0);
+              clientMQTT.publish("Test","Off");
+              clientMQTT.publish("Nombre",nb);
+            }
          }
          else
          {
+          nb_bad+=1;
+          if(nb_bad>=3){
+              clientMQTT.publish("Alerte","ALERTE! INTRUS!");
+          }
           digitalWrite(led_rouge, 1);
           delay(1000);
           digitalWrite(led_rouge, 0);
          }
        }
     }
- 
+
+    if(!digitalRead(bouton_open)){
+         if(nb_people)
+         nb_people-=1;
+         char* nb = "0";
+         nb[0]+=nb_people;
+         clientMQTT.publish("Test","On");
+         delay(500);
+         digitalWrite(led_verte,1);
+         position = 160;
+         maPorte.write(position);
+         delay(5000);
+         position = 0;
+         maPorte.write(position);
+         delay(1000);
+         digitalWrite(led_verte,0);
+         clientMQTT.publish("Test","Off");
+         clientMQTT.publish("Nombre",nb);      
+    }
           
-    if(!digitalRead(bouton)) //lors de l'appui du bouton pour enregistrer un nouveau badge
+    if(!digitalRead(bouton_register)) //lors de l'appui du bouton pour enregistrer un nouveau badge
     {
-       while(!digitalRead(bouton)) {} //anti rebond sur le bouton d'enregistrement de nouveau badge
+       while(!digitalRead(bouton_register)) {} //anti rebond sur le bouton d'enregistrement de nouveau badge
        delay(100);
        
        digitalWrite(led_rouge, 1); digitalWrite(led_verte,1); //allumage des deux leds simultanément pour signaler que c'est OOOKAAAAAYYYYY et prêt
   
-       while (!rfid.isCard() && digitalRead(bouton)) {} //on attend la lecture d'un badge, ou le rappui du bouton qui va annuler, car le if suivant ne sera pas vérifié
+       while (!rfid.isCard() && digitalRead(bouton_register)) {} //on attend la lecture d'un badge, ou le rappui du bouton qui va annuler, car le if suivant ne sera pas vérifié
        
        if (rfid.readCardSerial())
        {
@@ -203,9 +293,10 @@ void loop()
          //si on rappuie sur le bouton, retour
         digitalWrite(led_rouge,0);
         digitalWrite(led_verte,0);
-        while(!digitalRead(bouton)) {} //anti redéclenchement si on reste appuyé
+        while(!digitalRead(bouton_register)) {} //anti redéclenchement si on reste appuyé
         delay(500);
       }
      }
     rfid.halt();
+    yield();
 }

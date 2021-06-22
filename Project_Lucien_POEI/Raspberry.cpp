@@ -1,26 +1,45 @@
 //============================================================================
-// Name        : thread_test.cpp
-// Author      : 
+// Name        : Project_POEI.cpp
+// Author      : Lucien
 // Version     :
 // Copyright   : Your copyright notice
 // Description : Hello World in C++, Ansi-style
 //============================================================================
 
-
 #include <iostream>
-#include <unistd.h>
-#include <pigpio.h>
+#include <cstdlib>
+#include <string>
 #include <cstring>
+#include <cctype>
+#include <thread>
+#include <chrono>
+#include <pigpio.h>
+#include <unistd.h>
+#include "mqtt/async_client.h"
+
 #define O_LED 17
+#define O_LED2 23
+#define BUZZER_PWM 18
 using namespace std;
 uint16_t valeur;
+volatile char* nb;
+const string SERVER_ADDRESS { "tcp://192.168.0.16:1883" };
+const string CLIENT_ID { "pi" };
+int pwmValue_init =0;
+int pwmValue_alert =20;
+/////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) {
+
 	if (gpioInitialise() < 0) {
 		cout << "Error initializing pigpio library..." << endl;
 		exit(-1);
 	}
-	gpioSetMode(O_LED, PI_OUTPUT);
+
+	//MQTT
+	mqtt::async_client cli(SERVER_ADDRESS, CLIENT_ID);
+
+	//SPI
 	uint32_t flags = 0x00;
 	int hSpi = spiOpen(0, 100000, flags);
 	if (hSpi > 0) {
@@ -28,36 +47,88 @@ int main(int argc, char *argv[]) {
 		gpioTerminate();
 		exit(-1);
 	}
-	const char *sBuffer = "5!? ";
-	const char *sBuffer2 = "Nombre? ";
+	//char sBuffer[3];
+	//sBuffer[0]=nb;sBuffer[1]='!';sBuffer[2]=' ';
+	const char *sBuffer = "! ";
 	char rBuffer[100];
-	char rBuffer2[100];
-//spiWrite(hSpi,(char *)buffer,3);
-	while (1) {
-		spiXfer(hSpi, (char*) sBuffer, (char*) rBuffer, strlen(sBuffer));
-		cout << "Received : ";
-		valeur = (int) rBuffer[0];
-		cout << valeur << endl;
-		//cout << (int)rBuffer[0]<< endl;
-		//cout << rBuffer[1] << endl;
-		if (valeur < 10) {
-			gpioWrite(O_LED, 0);
-		} else {
-			gpioWrite(O_LED, 1);
+
+	//Buzzer
+	gpioSetMode(BUZZER_PWM, PI_OUTPUT);
+	gpioPWM(BUZZER_PWM, pwmValue_init);
+
+	try {
+// Connect to the server
+		cout << "Connecting to the MQTT server..." << flush;
+		cli.start_consuming();
+		//cli.connect()->wait();
+		//cli.subscribe("Test", 1)->wait();
+		auto rsp = cli.connect()->get_connect_response();
+		// If there is no session present, then we need to subscribe, but if
+		// there is a session, then the server remembers us and our subscriptions.
+		if (!rsp.is_session_present())
+			cli.subscribe("Test", 1)->wait();
+		if (!rsp.is_session_present())
+			cli.subscribe("Nombre", 1)->wait();
+		if (!rsp.is_session_present())
+			cli.subscribe("Alerte", 1)->wait();
+
+		while (1) {
+
+			/* Methode bloquante */
+
+			//auto msg = cli.consume_message();
+			/*Methode non bloquante*/
+
+			mqtt::const_message_ptr msg;
+
+
+			bool verif = cli.try_consume_message(&msg);
+			if (verif) {
+					if(msg->get_topic()=="Nombre"){
+							cout << "Nombre: " << msg->to_string() << endl;
+							//nb[0]=nb[0]+1;
+					}
+					if(msg->get_topic()=="Alerte"){
+						if(msg->to_string()=="ALERTE! INTRUS!")
+							gpioPWM(BUZZER_PWM, pwmValue_alert);
+						if(msg->to_string()=="STOP")
+							gpioPWM(BUZZER_PWM, pwmValue_init);
+						cout << msg->to_string() << endl;
+					}
+
+			}
+			/*sleep(5);
+			//sBuffer[0] = nb;
+			cout << nb << endl;
+			spiXfer(hSpi, (char*) sBuffer, (char*) rBuffer, strlen(sBuffer));
+			spiXfer(hSpi, (char*) nb, (char*) rBuffer, strlen(sBuffer));
+			cout << "Received : ";
+			cout << (int) rBuffer[0] << endl;
+			sleep(1);*/
+
 		}
-		/*sleep(1);
-		spiXfer(hSpi, (char*) sBuffer2, (char*) rBuffer2, strlen(sBuffer2));
-		cout << "2nd Received : ";
-		cout << (int)rBuffer2[0] << endl;
-		*/
-		sleep(1);
+	} catch (const mqtt::exception &exc) {
+		cerr << "\n " << exc << endl;
+		return 1;
 	}
-	/*spiXfer(hSpi, (char*) sBuffer, (char*) rBuffer, strlen(sBuffer));
-	 for (size_t j = 0; j < strlen(sBuffer); j++)
-	 cout << rBuffer[j];
-	 cout << endl;*/
-	spiClose(hSpi);
-	gpioTerminate();
+
+	cout << "\nNow, the program is connected to the broker" << flush;
+
+	try {
+		if (cli.is_connected()) {
+			cout << "\nShutting down and disconnecting from the MQTT server..."
+					<< flush;
+			cli.disconnect()->wait();
+			cout << "\nNow it is disconnected..." << flush;
+		} else {
+			cout << "\nClient was already disconnected" << flush;
+		}
+		//spiClose(hSpi);
+		gpioTerminate();
+	} catch (const mqtt::exception &exc) {
+		cerr << "\n " << exc << endl;
+		return 1;
+	}
+
 	return 0;
 }
-
