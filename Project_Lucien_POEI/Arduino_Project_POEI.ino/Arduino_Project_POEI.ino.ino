@@ -1,6 +1,3 @@
-//YWROBOT
-//Compatible with the Arduino IDE 1.0
-//Library version:1.1
 #include <Wire.h>
 
 uint8_t addr_slave  = 0x18 ;
