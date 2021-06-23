@@ -11,10 +11,9 @@
 
 WiFiClient wifiClient;
 PubSubClient clientMQTT(wifiClient);
-const char* ssid = "SFR-3cc0";
-const char* password =  "MANZACAPITAO";
-const char* esp_mqtt_server = "127.0.0.1";
-const char* rpi_mqtt_server = "192.168.0.16";
+const char* ssid = "POEI";
+const char* password =  "COURS@POEI20";
+const char* rpi_mqtt_server = "192.168.8.126";
 const int esp_mqttPort = 12948;
 const char* esp_mqttUser = "esp";
 
@@ -100,6 +99,7 @@ void setup()
 
 void reconnect() {
   clientMQTT.setServer(rpi_mqtt_server, 1883);
+  clientMQTT.setCallback(callback);
   Serial.println("Trying to connect to MQTT broker");
   while (!clientMQTT.connected()) {
     Serial.print(".");  
@@ -110,6 +110,17 @@ void reconnect() {
   clientMQTT.subscribe("esp/auth");
   Serial.println("Connected to Broker...");
 }
+
+void callback(char* topic, byte* message, unsigned int length) {
+  Serial.print("Message arrived on topic: ");
+  Serial.println(topic);
+  //if (topic == "esp/auth")
+    authorization = true;
+    Serial.println("Authorisé !");
+    
+} 
+  
+
 
 void new_badge()
 { 
@@ -206,6 +217,7 @@ void loop()
               delay(1000);
               digitalWrite(led_verte,0);
               clientMQTT.publish("Test","Off");
+              clientMQTT.publish("Nombre/add",nb);
               clientMQTT.publish("Nombre",nb);
             }
          }
@@ -238,9 +250,11 @@ void loop()
          delay(1000);
          digitalWrite(led_verte,0);
          clientMQTT.publish("Test","Off");
+         clientMQTT.publish("Nombre/sub",nb);
          clientMQTT.publish("Nombre",nb);      
     }
-          
+    Serial.println(authorization);
+    if(authorization){  
     if(!digitalRead(bouton_register)) //lors de l'appui du bouton pour enregistrer un nouveau badge
     {
        while(!digitalRead(bouton_register)) {} //anti rebond sur le bouton d'enregistrement de nouveau badge
@@ -270,12 +284,12 @@ void loop()
               digitalWrite(led_verte, 1);
               delay(200);
               digitalWrite(led_verte, 0);
+              authorization = false;
             }
           else //si le badge que l'on veut ajouter est déjà enregistré, du con, ça clignote rouge
           {
               digitalWrite(led_verte, 0);
               digitalWrite(led_rouge, 1);
-              //tone(buzz,370,500);
               delay(200);
               digitalWrite(led_rouge, 0);
               delay(200);
@@ -286,6 +300,8 @@ void loop()
               digitalWrite(led_rouge, 1);
               delay(200);
               digitalWrite(led_rouge, 0);
+              authorization = false;
+              //clientMQTT.publish("esp/auth","NOP");
           }
         }
       else 
@@ -297,6 +313,11 @@ void loop()
         delay(500);
       }
      }
+     }
+     char* nb = "0";
+     nb[0]+=nb_people;
+     clientMQTT.publish("Nombre",nb); 
     rfid.halt();
     yield();
+    clientMQTT.loop();
 }

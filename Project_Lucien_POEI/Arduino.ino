@@ -1,36 +1,18 @@
-
-/*
-void loop () {
-   if (finish) {
-    Serial.print("Received message : ");
-    for (int i = 0; i < rSize; i++)
-        Serial.println((char)myArray[i]);
-        Serial.println(map(analogRead(A0), 0, 1024, 0, 255));
-        Serial.print((analogRead(A0))&0xFF);
-        Serial.println("\n=============================================");
-     rSize = 0;
-     finish = false;
-     }
-}*/
-
 #include <Wire.h>
 #include <SPI.h>
-
-
-volatile int rSize = 0;
-volatile bool finish = false;
-char myArray[100];
-volatile uint8_t lum =0;
-uint8_t addr_slave  = 0x18 ;
 #include <LiquidCrystal_I2C.h>
 #include <SPI.h>
 
-LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
-
-int nb_people = 0;
-char myArray[100];
 volatile int rSize = 0;
 volatile bool finish = false;
+int nb_people = 0;
+char myArray[100];
+volatile uint8_t lum =0;
+uint8_t addr_slave  = 0x18 ;
+
+
+LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+
 
 void setup()
 {
@@ -100,17 +82,21 @@ void loop()
   /************************************************
    *                      LCD                     *
    ***********************************************/
-  Serial.print("Temperature = ");
-  Serial.println(temperature);
-  lcd.setCursor(0,0);
-  lcd.print("T : ");
-  lcd.print(temperature);
-  lcd.print(" C");
-  lcd.setCursor(0,1);
-  lcd.print("How many ppl? :");
-  lcd.print(nb_people);
-  Serial.println(temperatureLSB);
-  Serial.println(temperatureMSB);
-  delay(1000);
+  if(finish){
+    Serial.print("Temperature = ");
+    Serial.println(temperature);
+    lcd.setCursor(0,0);
+    lcd.print("T : ");
+    lcd.print(temperature);
+    lcd.print(" C");
+    lcd.setCursor(0,1);
+    lcd.print("How many ppl? :");
+    lcd.print((char)myArray[0]);
+    Serial.println(temperatureLSB);
+    Serial.println(temperatureMSB);
+    Serial.println(map(analogRead(A0), 0, 1024, 0, 255));
+    rSize = 0;
+    finish = false;
+  }
  
  }
