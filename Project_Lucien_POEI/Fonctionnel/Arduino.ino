@@ -9,6 +9,7 @@ int nb_people = 0;
 char myArray[100];
 volatile uint8_t lum =0;
 uint8_t addr_slave  = 0x18 ;
+int lcd_state = 0;
 
 
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
@@ -83,13 +84,21 @@ void loop()
    *                      LCD                     *
    ***********************************************/
   if(finish){
-    if((char)myArray[0]=='0'){
-      lcd.noBacklight(); //eteindre le retro-eclairage
+    if((char)myArray[0]=='6'){
+    Serial.print("Temperature = ");
+    Serial.println(temperature);
+    lcd.setCursor(0,0);
+    lcd.print("T : ");
+    lcd.print(temperature);
+    lcd.print(" C");
+    lcd.setCursor(0,1);
+    lcd.print("      MAX       ");
+    rSize = 0;
+    finish = false;
     }
     else{
     Serial.print("Temperature = ");
     Serial.println(temperature);
-    lcd.backlight();
     lcd.setCursor(0,0);
     lcd.print("T : ");
     lcd.print(temperature);
@@ -97,9 +106,6 @@ void loop()
     lcd.setCursor(0,1);
     lcd.print("How many ppl? :");
     lcd.print((char)myArray[0]);
-    Serial.println(temperatureLSB);
-    Serial.println(temperatureMSB);
-    Serial.println(map(analogRead(A0), 0, 1024, 0, 255));
     rSize = 0;
     finish = false;
     }

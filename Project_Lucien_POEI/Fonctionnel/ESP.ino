@@ -205,7 +205,7 @@ void loop()
                 delay(1000);
                 digitalWrite(led_rouge, 0);
             }
-            if(nb_people>0 && nb_people<6){
+            if(nb_people>=0 && nb_people<6){
               nb_people+=1;
               char* nb = "0";
               nb[0]+=nb_people;

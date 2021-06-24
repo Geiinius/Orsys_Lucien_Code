@@ -16,6 +16,7 @@
 #include <pigpio.h>
 #include <unistd.h>
 #include "mqtt/async_client.h"
+#include <curl/curl.h>
 
 #define O_LED 17
 #define O_LED2 23
@@ -30,12 +31,28 @@ int pwmValue_init =0;
 int pwmValue_alert =20;
 /////////////////////////////////////////////////////////////////////////////
 
+static size_t WriteCallback(void *contents, size_t size, size_t nmemb,void *userp) {
+	((std::string*) userp)->append((char*) contents, size * nmemb);
+	return size * nmemb;
+}
+
 int main(int argc, char *argv[]) {
+	CURLcode res;
+	CURL *curl;
+	std::string readBuffer;
+	const char *urlTemplate = "https://maker.ifttt.com/trigger/Alarme/with/key/cWz8VKaG25leugptBiPhv";
 
 	if (gpioInitialise() < 0) {
 		cout << "Error initializing pigpio library..." << endl;
 		exit(-1);
 	}
+
+	//init request
+	curl = curl_easy_init();
+	curl_easy_setopt(curl, CURLOPT_URL, urlTemplate);
+	curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
 
 	//MQTT
 	mqtt::async_client cli(SERVER_ADDRESS, CLIENT_ID);
@@ -93,12 +110,17 @@ int main(int argc, char *argv[]) {
 				}
 				if(msg->get_topic()=="Nombre/sub"){
 						cout << "Nombre: " << msg->to_string() << endl;
-						if(nb<6)
+						if(nb<6 && nb>=0)
 							nb=nb-1;
 				}
 				if(msg->get_topic()=="Alerte"){
-					if(msg->to_string()=="ALERTE! INTRUS!")
+					if(msg->to_string()=="ALERTE! INTRUS!"){
 						gpioPWM(BUZZER_PWM, pwmValue_alert);
+						if (curl) {
+							res = curl_easy_perform(curl);
+							cout << "Requete exécutée" <<endl;
+						}
+					}
 					if(msg->to_string()=="STOP")
 						gpioPWM(BUZZER_PWM, pwmValue_init);
 					cout << msg->to_string() << endl;
@@ -141,6 +163,7 @@ int main(int argc, char *argv[]) {
 			cout << "\nClient was already disconnected" << flush;
 		}
 		spiClose(hSpi);
+		curl_easy_cleanup(curl);
 		gpioTerminate();
 	} catch (const mqtt::exception &exc) {
 		cerr << "\n " << exc << endl;
