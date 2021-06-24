@@ -10,6 +10,7 @@ char myArray[100];
 volatile uint8_t lum =0;
 uint8_t addr_slave  = 0x18 ;
 int lcd_state = 0;
+//byte degre[8] = { B00000, B00110, B01001, B01001, B00110, B00000, B00000, B00000 }
 
 
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
@@ -25,6 +26,7 @@ Wire.beginTransmission(addr_slave);
   // Print a message to the LCD.
   lcd.backlight();
   lcd.setCursor(1,0);
+//  lcd.createChar(0, degre);
   
   //SPI
   pinMode(MISO, OUTPUT);
@@ -90,7 +92,8 @@ void loop()
     lcd.setCursor(0,0);
     lcd.print("T : ");
     lcd.print(temperature);
-    lcd.print(" C");
+    lcd.print((char)223);
+    lcd.print("C");
     lcd.setCursor(0,1);
     lcd.print("      MAX       ");
     rSize = 0;
@@ -102,7 +105,8 @@ void loop()
     lcd.setCursor(0,0);
     lcd.print("T : ");
     lcd.print(temperature);
-    lcd.print(" C");
+    lcd.print((char)223);
+    lcd.print("C");
     lcd.setCursor(0,1);
     lcd.print("How many ppl? :");
     lcd.print((char)myArray[0]);

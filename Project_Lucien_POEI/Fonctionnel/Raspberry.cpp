@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
 				}
 				if(msg->get_topic()=="Nombre/sub"){
 						cout << "Nombre: " << msg->to_string() << endl;
-						if(nb<6 && nb>=0)
+						if(nb<6 && nb>0)
 							nb=nb-1;
 				}
 				if(msg->get_topic()=="Alerte"){
@@ -127,7 +127,8 @@ int main(int argc, char *argv[]) {
 				}
 
 			}
-			sleep(1);
+			//sleep(1);
+			usleep(700);
 			char rBuffer[100];
 			char sBuffer[2];
 			sBuffer[0] = (char)('0'+nb);
@@ -136,13 +137,14 @@ int main(int argc, char *argv[]) {
 			spiXfer(hSpi, (char*) sBuffer, (char*) rBuffer, strlen(sBuffer));
 			//int value = (int) rBuffer[0];
 			cout << "Received : "<< (int)rBuffer[0]<< endl;
-			sleep(1);
+			//sleep(1);
+			usleep(500);
 
 			if(rBuffer[0] <= 60)
 				gpioPWM(LED_PWM,245);
-			if(rBuffer[0]>= 140)
+			if(rBuffer[0]>= 110)
 				gpioPWM(LED_PWM, 0);
-			if(rBuffer[0]<140 && rBuffer[0]>60)
+			if(rBuffer[0]<110 && rBuffer[0]>60)
 				gpioPWM(LED_PWM, 20);
 
 		}
